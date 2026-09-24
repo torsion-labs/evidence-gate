@@ -33,7 +33,7 @@ pip install pytest
 python -m pytest
 ```
 
-No API key. No network. No model download. Under a second.
+No API key. No network. No model download. The suite runs locally; elapsed time depends on the environment.
 
 That is deliberate, and it is the first claim this repository makes about itself. A retrieval test that depends on a hosted model is not a test of your code — it is a test of someone else's service on the day you ran it. Everything that could reach the network sits behind a protocol in [`ports.py`](src/evidence_gate/ports.py), and the defaults that ship are deterministic and offline.
 
@@ -99,7 +99,7 @@ The report prints its failures, with what was cited and what was expected. A rep
 
 ## What this is not
 
-- **Not a framework.** Six small modules, no runtime dependencies, standard library only.
+- **Not a framework.** Nine focused modules, no runtime dependencies, standard library only.
 - **Not a benchmark.** It measures citation correctness on the questions you agreed. It says nothing about questions outside that set, and it does not measure writing quality.
 - **Not a guarantee.** A test set bounds what it covers. Anything else is unmeasured, and this repository would rather say so than imply otherwise.
 - **Not production infrastructure.** No auth, no rate limiting, no hosted index. Those are decisions that belong to your deployment, not to a library.
