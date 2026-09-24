@@ -29,11 +29,11 @@ answer.text                  # "I could not answer that from your documents.
 ```bash
 git clone <this repository>
 cd evidence-gate
-pip install pytest
+pip install pytest pypdf
 python -m pytest
 ```
 
-No API key. No network. No model download. The suite runs locally; elapsed time depends on the environment.
+No API key. No network. No model download. The suite runs locally; elapsed time depends on the environment. Without `pypdf` the PDF tests are skipped, not failed, and everything else still runs.
 
 That is deliberate, and it is the first claim this repository makes about itself. A retrieval test that depends on a hosted model is not a test of your code — it is a test of someone else's service on the day you ran it. Everything that could reach the network sits behind a protocol in [`ports.py`](src/evidence_gate/ports.py), and the defaults that ship are deterministic and offline.
 
@@ -97,9 +97,42 @@ A case pairs a question with the source that holds its answer. It passes when th
 
 The report prints its failures, with what was cited and what was expected. A report that only shows passes is not evidence.
 
+## Reading your documents
+
+```python
+from evidence_gate import Assistant, ingest
+
+report = ingest(["policies/"], root="policies/")
+print(report.summary())
+# for example:
+# 12 file(s) read, 340 chunk(s) indexed.
+# - handbook.pdf: no text on page(s) 7, 8. Usually a scanned image; it needs OCR before it can be searched.
+# - prices.xlsx: no reader for .xlsx
+# 5 fragment(s) under 40 characters were not indexed, usually page numbers and footers: 'Page 1 of 9', 'Page 2 of 9', 'Internal use only' and others.
+
+assistant = Assistant.build(report.chunks)
+```
+
+| Format | Needs | A citation points to |
+|---|---|---|
+| PDF | `pip install "evidence-gate[pdf]"`, which brings `pypdf` | file and page: `handbook.pdf p.12` |
+| DOCX | nothing: a .docx is a zip of XML, and the standard library reads both | file and section: `policy.docx §Sick leave` |
+| Markdown and text | nothing | file and section; form feeds count as page breaks |
+
+**The report is the point.** Ingestion is where an index most often ends up smaller than the documents it came from, and nobody notices: a scanned page has no text, so it is never retrieved, so the assistant behaves as if it did not exist. The same happens to a format nobody wrote a reader for, and to a PDF read on a machine without `pypdf`. `ingest` never drops anything quietly. `report.complete` is False whenever a page or a file was left out, and `summary()` is written for the person who owns the documents.
+
+Fragments too short to index are listed too, but they do not make an ingestion incomplete: almost every PDF has page numbers and footers, and an alarm that rings on every document is one nobody reads. They are listed because the suite found the case where it matters — a three-row table alone under its heading, shorter than the chunker's minimum.
+
+**A DOCX has no page numbers, and says so.** Where its pages break depends on the fonts and printer of whoever opens it, so the reader returns none and the citation falls back to the section heading. A guessed page number would look exactly like a real one.
+
+**Headings are what the chunker's first fix depends on**, so the readers take care over them. A Spanish copy of Word stores *Título 1* under the internal name *heading 1*, and the reader goes by the internal name. A heading in the middle of a PDF page starts its own block. And a section that crosses a page break keeps its heading on the next page — without that, the adjacent-section failure above comes back at every page break.
+
+Two files that would be cited by the same name are refused rather than merged. Pass `root=` and the citations carry their folder.
+
 ## What this is not
 
-- **Not a framework.** Nine focused modules, no runtime dependencies, standard library only.
+- **Not a framework.** Eleven focused modules, no runtime dependencies, standard library only. Reading PDFs is the one optional extra.
+- **Not OCR.** A scanned page is reported, not read.
 - **Not a benchmark.** It measures citation correctness on the questions you agreed. It says nothing about questions outside that set, and it does not measure writing quality.
 - **Not a guarantee.** A test set bounds what it covers. Anything else is unmeasured, and this repository would rather say so than imply otherwise.
 - **Not production infrastructure.** No auth, no rate limiting, no hosted index. Those are decisions that belong to your deployment, not to a library.
@@ -123,11 +156,13 @@ src/evidence_gate/
   answer.py      citations first, prose second
   pipeline.py    the three wired together
   evaluate.py    the test set and its report
+  readers.py     PDF, DOCX and text, with the page numbers that are real
+  ingest.py      files and folders in, chunks out, and what was left out
 ```
 
 ## Status
 
-Early. The core is complete and tested; readers for PDF and DOCX, and hosted embedder adapters, are next and arrive behind the existing protocols.
+Early. The core is complete and tested. Readers for PDF, DOCX and text arrived in 0.2.0, with the ingestion report. Hosted embedder adapters are next and arrive behind the existing protocols.
 
 Built at [Torsion Labs](https://torsion-labs.com).
 

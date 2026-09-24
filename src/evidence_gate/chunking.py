@@ -99,12 +99,38 @@ def chunk_page(
     page: int | None = None,
     policy: ChunkingPolicy | None = None,
     start_ordinal: int = 0,
+    section: str | None = None,
 ) -> list[Chunk]:
-    """Split one page of text into chunks that remember where they are."""
-    policy = policy or ChunkingPolicy()
+    """Split one page of text into chunks that remember where they are.
+
+    `section` is the heading in force when the page starts. A heading does not
+    stop applying at a page break, and chunk_document passes it on.
+    """
+    chunks, _, _ = _chunk_page(
+        text,
+        file=file,
+        page=page,
+        policy=policy or ChunkingPolicy(),
+        start_ordinal=start_ordinal,
+        section=section,
+    )
+    return chunks
+
+
+def _chunk_page(
+    text: str,
+    *,
+    file: str,
+    page: int | None,
+    policy: ChunkingPolicy,
+    start_ordinal: int,
+    section: str | None,
+) -> tuple[list[Chunk], str | None, list[str]]:
+    """chunk_page, also returning the heading in force at the end of the page
+    and the text of every block that was too short to index."""
     chunks: list[Chunk] = []
+    dropped: list[str] = []
     ordinal = start_ordinal
-    section: str | None = None
 
     for block in _PARAGRAPH.split(text):
         lines = [ln for ln in block.splitlines() if ln.strip()]
@@ -121,7 +147,11 @@ def chunk_page(
         body = " ".join(ln.strip() for ln in body_lines).strip()
         if len(body) < policy.min_chars:
             # Too short to stand alone. A lone heading is not evidence, and a
-            # stray line is not worth a citation.
+            # stray line is not worth a citation. But it is recorded: a short
+            # block is usually a page number, and occasionally a small table
+            # that held the answer.
+            if body:
+                dropped.append(body)
             continue
 
         source = Source(file=file, page=page, section=section)
@@ -139,7 +169,7 @@ def chunk_page(
             )
             ordinal += 1
 
-    return chunks
+    return chunks, section, dropped
 
 
 def chunk_document(
@@ -148,13 +178,38 @@ def chunk_document(
     file: str,
     policy: ChunkingPolicy | None = None,
 ) -> list[Chunk]:
-    """Chunk a whole document, preserving page numbers across the sequence."""
-    policy = policy or ChunkingPolicy()
+    """Chunk a whole document, preserving page numbers across the sequence.
+
+    The heading in force at the end of one page carries into the next. A
+    section that starts at the bottom of page 3 and continues on page 4 is one
+    section, and the chunks from page 4 need its heading as much as the ones
+    from page 3 do: without it, the adjacent-section failure described at the
+    top of this module comes back for every section that crosses a page break.
+    """
+    chunks, _ = _chunk_document(pages, file=file, policy=policy or ChunkingPolicy())
+    return chunks
+
+
+def _chunk_document(
+    pages: list[tuple[int | None, str]],
+    *,
+    file: str,
+    policy: ChunkingPolicy,
+) -> tuple[list[Chunk], list[tuple[int | None, str]]]:
+    """chunk_document, also returning (page, text) for every block too short
+    to index, so that ingestion can report them instead of losing them."""
     out: list[Chunk] = []
+    dropped: list[tuple[int | None, str]] = []
+    section: str | None = None
     for page, text in pages:
-        out.extend(
-            chunk_page(
-                text, file=file, page=page, policy=policy, start_ordinal=len(out)
-            )
+        chunks, section, short = _chunk_page(
+            text,
+            file=file,
+            page=page,
+            policy=policy,
+            start_ordinal=len(out),
+            section=section,
         )
-    return out
+        out.extend(chunks)
+        dropped.extend((page, body) for body in short)
+    return out, dropped

@@ -30,10 +30,17 @@ class Source:
             raise ValueError(f"Source.page must be 1-based, got {self.page}")
 
     def cite(self) -> str:
-        """A short human-readable citation, e.g. 'contract-v3.pdf p.12'."""
+        """A short human-readable citation, e.g. 'contract-v3.pdf p.12'.
+
+        When there is no page -- a DOCX file, a plain text file -- the section
+        heading stands in for it ('policy.docx §Refunds'), because a citation
+        that names only the file sends the reader to search the whole document.
+        """
         parts = [self.file]
         if self.page is not None:
             parts.append(f"p.{self.page}")
+        elif self.section:
+            parts.append(f"§{self.section}")
         return " ".join(parts)
 
 

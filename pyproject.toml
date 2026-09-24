@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "evidence-gate"
-version = "0.1.0"
+version = "0.2.0"
 description = "Retrieval over your own documents, with citations you can check and a gate that is allowed to say no."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -12,13 +12,15 @@ license = "Apache-2.0"
 keywords = ["rag", "retrieval", "citations", "evaluation", "provenance"]
 
 # No runtime dependencies, on purpose. The core is standard library only, so
-# the test suite runs anywhere with nothing installed but pytest. Readers for
-# PDF and DOCX, and hosted embedders, arrive as optional extras behind the
-# protocols in ports.py.
+# the test suite runs anywhere with nothing installed but pytest. DOCX is read
+# with the standard library too; PDF is the one optional extra, imported only
+# when a PDF is actually read. Hosted embedders will arrive the same way,
+# behind the protocols in ports.py.
 dependencies = []
 
 [project.optional-dependencies]
-dev = ["pytest>=7.0"]
+pdf = ["pypdf>=4.0"]
+dev = ["pytest>=7.0", "pypdf>=4.0"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/evidence_gate"]
