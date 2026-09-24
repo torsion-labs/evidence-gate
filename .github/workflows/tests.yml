@@ -1,0 +1,53 @@
+# The test suite, on every change, where anyone can see it.
+#
+# Two installs per Python version: with pypdf, and without it. The second is
+# the promise the README makes -- the core needs nothing but the standard
+# library, and the PDF tests are skipped rather than failed -- checked instead
+# of asserted.
+#
+# `all tests` is the single check that branch protection requires. It passes
+# only when every job in the matrix passed, so adding a Python version never
+# means editing the protection rule.
+
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Python ${{ matrix.python }} · ${{ matrix.pdf }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.10", "3.11", "3.12", "3.13", "3.14"]
+        pdf: ["with pypdf", "without pypdf"]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install "pytest>=7.0"
+          if [ "${{ matrix.pdf }}" = "with pypdf" ]; then
+            python -m pip install "pypdf>=4.0"
+          fi
+      - name: Run the suite
+        run: python -m pytest -rs
+
+  all-tests:
+    name: all tests
+    needs: test
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Every job in the matrix passed
+        run: test "${{ needs.test.result }}" = "success"

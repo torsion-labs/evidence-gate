@@ -1,5 +1,7 @@
 # evidence-gate
 
+[![tests](https://github.com/torsion-labs/evidence-gate/actions/workflows/tests.yml/badge.svg)](https://github.com/torsion-labs/evidence-gate/actions/workflows/tests.yml)
+
 Retrieval over your own documents, with citations you can check and a gate that is allowed to say no.
 
 Most retrieval systems rank passages, hand the best few to a language model, and the model writes something. It always writes something — that is what it is for. This library adds the piece that is missing: a gate that decides whether what came back is *enough*, and refuses when it is not.
@@ -34,6 +36,8 @@ python -m pytest
 ```
 
 No API key. No network. No model download. The suite runs locally; elapsed time depends on the environment. Without `pypdf` the PDF tests are skipped, not failed, and everything else still runs.
+
+The same suite runs on every change, on Python 3.10 to 3.14, once with `pypdf` and once without it. The badge at the top is that run, and nothing is merged into `main` unless it passes.
 
 That is deliberate, and it is the first claim this repository makes about itself. A retrieval test that depends on a hosted model is not a test of your code — it is a test of someone else's service on the day you ran it. Everything that could reach the network sits behind a protocol in [`ports.py`](src/evidence_gate/ports.py), and the defaults that ship are deterministic and offline.
 
