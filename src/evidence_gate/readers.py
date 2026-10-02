@@ -2,9 +2,9 @@
 
 Three formats are covered. Plain text and Markdown need nothing. DOCX needs
 nothing either: a .docx file is a zip of XML, and the standard library reads
-both. PDF needs `pypdf`, installed with `pip install "evidence-gate[pdf]"`,
-and only when a PDF is actually read, so the core keeps its promise of no
-runtime dependencies.
+both. PDF needs `pypdf`, installed with `pip install pypdf`, and only when a
+PDF is actually read, so the core keeps its promise of no runtime
+dependencies.
 
 Every reader follows the contract in ports.py. A page number is returned only
 when the format has pages. A PDF does. A DOCX file does not: where its pages
@@ -43,8 +43,7 @@ class MissingDependency(ImportError):
 
     def __init__(self, extra: str, package: str) -> None:
         super().__init__(
-            f"reading these files needs {package}: "
-            f'pip install "evidence-gate[{extra}]"'
+            f"reading these files needs {package}: pip install {package}"
         )
         self.extra = extra
         self.package = package

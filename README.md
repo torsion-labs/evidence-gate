@@ -119,9 +119,11 @@ assistant = Assistant.build(report.chunks)
 
 | Format | Needs | A citation points to |
 |---|---|---|
-| PDF | `pip install "evidence-gate[pdf]"`, which brings `pypdf` | file and page: `handbook.pdf p.12` |
+| PDF | `pypdf`, installed with `pip install pypdf` | file and page: `handbook.pdf p.12` |
 | DOCX | nothing: a .docx is a zip of XML, and the standard library reads both | file and section: `policy.docx §Sick leave` |
 | Markdown and text | nothing | file and section; form feeds count as page breaks |
+
+This repository is not published on PyPI, and the `evidence-gate` name there belongs to an unrelated project, so installing by that name would fetch someone else's code. Use the library from a clone: `pip install .`, or `pip install ".[pdf]"` to bring `pypdf` along.
 
 **The report is the point.** Ingestion is where an index most often ends up smaller than the documents it came from, and nobody notices: a scanned page has no text, so it is never retrieved, so the assistant behaves as if it did not exist. The same happens to a format nobody wrote a reader for, and to a PDF read on a machine without `pypdf`. `ingest` never drops anything quietly. `report.complete` is False whenever a page or a file was left out, and `summary()` is written for the person who owns the documents.
 
