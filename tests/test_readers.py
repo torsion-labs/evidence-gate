@@ -412,7 +412,10 @@ class TestIngest:
         )
         report = ingest([tmp_path])
         assert report.read == ("notes.md",)
-        assert 'pip install "evidence-gate[pdf]"' in report.skipped[0].reason
+        reason = report.skipped[0].reason
+        assert "pip install pypdf" in reason
+        # that project name on PyPI belongs to someone else
+        assert "evidence-gate" not in reason
 
 
 # --------------------------------------------------------------------------
