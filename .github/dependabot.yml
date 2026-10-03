@@ -1,0 +1,9 @@
+# Keeps the pinned GitHub Actions current. Dependency and security alerts for
+# the Python packages are handled by Dependabot security updates, which are
+# already enabled for this repository.
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
