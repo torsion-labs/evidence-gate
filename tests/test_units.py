@@ -374,3 +374,63 @@ class TestTheAssistantCannotSkipTheGate:
     def test_an_empty_corpus_answers_nothing(self):
         answer = Assistant.build([]).ask("anything at all?")
         assert not answer.answered
+
+
+class TestHostileInputIsCheapToReject:
+    """A line that is not a heading must be rejected in linear time."""
+
+    def test_a_long_run_of_spaces_cannot_stall_heading_detection(self):
+        import time
+
+        # "A" + spaces + "!" is not a heading. With a `\s*` beside the character
+        # class that holds the space, rejecting it took quadratic time: 60,000
+        # spaces were about twenty seconds. It must now be effectively instant.
+        line = "A" + " " * 60_000 + "!"
+        started = time.perf_counter()
+        assert detect_heading(line) is None
+        assert time.perf_counter() - started < 1.0
+
+    def test_the_same_line_does_not_stall_chunking(self):
+        import time
+
+        started = time.perf_counter()
+        chunk_page("A" + " " * 60_000 + "!", file="hostile.md")
+        assert time.perf_counter() - started < 1.0
+
+
+class TestAnAnchorIsNotFoundInsideAnotherNumber:
+    """The near-miss the anchors exist to catch, one digit away.
+
+    The gate used to look for an anchor as a plain substring, so a question
+    about 48 hours was satisfied by a passage about 148. It must be refused.
+    """
+
+    @pytest.mark.parametrize(
+        "question, text",
+        [
+            ("What is the escalation path after 48 hours?", "Escalation after 148 hours"),
+            ("What is the escalation path after 24 hours?", "Escalation after 124 hours"),
+            ("What is the escalation path after 48 hours?", "Escalation after 48.5 hours"),
+            ("What is the notice period of 5 days?", "The notice period is 15 days"),
+            ("What is the handling fee of 1.5 percent?", "The handling fee is 11.5 percent"),
+            ("What is the limit of 100 users?", "The free plan has a limit of 1000 users"),
+        ],
+    )
+    def test_a_longer_number_does_not_satisfy_the_anchor(self, question, text):
+        chunks = chunk_page(
+            f"# Notes\n\n{text}, as written for every team in the whole company.",
+            file="notes.md",
+            page=1,
+        )
+        answer = Assistant.build(chunks).ask(question)
+        assert not answer.answered
+        assert answer.missing
+
+    def test_the_number_itself_still_satisfies_it(self):
+        chunks = chunk_page(
+            "# Notes\n\nEscalation after 48 hours, as written for every team in the company.",
+            file="notes.md",
+            page=1,
+        )
+        answer = Assistant.build(chunks).ask("What is the escalation path after 48 hours?")
+        assert answer.answered

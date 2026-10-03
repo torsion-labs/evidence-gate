@@ -459,3 +459,81 @@ class TestFromDocumentsToAnswers:
         )
         assert not answer.answered
         assert answer.missing == ("gift card",)
+
+
+def _zip_with(path: Path, parts: dict[str, str]) -> Path:
+    with zipfile.ZipFile(path, "w") as z:
+        for name, xml in parts.items():
+            z.writestr(name, xml)
+    return path
+
+
+class TestHostileInput:
+    """Documents that are not what they claim, from someone who is not you."""
+
+    def test_a_docx_part_over_the_limit_is_refused_before_it_is_read(self, tmp_path):
+        path = make_docx(tmp_path / "big.docx", para("a perfectly ordinary sentence"))
+        with pytest.raises(ValueError, match="limit"):
+            DocxReader(max_part_bytes=100).read(path)
+
+    def test_a_docx_that_declares_a_dtd_is_refused(self, tmp_path):
+        xml = (
+            f'<?xml version="1.0"?><!DOCTYPE w:document [<!ENTITY a "lol">]>'
+            f'<w:document xmlns:w="{_WNS}"><w:body>{para("&a;")}</w:body></w:document>'
+        )
+        path = _zip_with(tmp_path / "dtd.docx", {"word/document.xml": xml})
+        with pytest.raises(ValueError, match="DTD"):
+            DocxReader().read(path)
+
+    def test_a_text_file_over_the_limit_is_refused(self, tmp_path):
+        path = tmp_path / "big.txt"
+        path.write_text("x" * 1000, encoding="utf-8")
+        with pytest.raises(ValueError, match="limit"):
+            TextReader(max_bytes=100).read(path)
+
+    def test_a_refused_file_is_a_line_in_the_report_not_a_crash(self, tmp_path):
+        (tmp_path / "notes.md").write_text(
+            "# Notes\n\nA note long enough to be worth indexing on its own.",
+            encoding="utf-8",
+        )
+        _zip_with(
+            tmp_path / "dtd.docx",
+            {"word/document.xml": '<!DOCTYPE d [<!ENTITY a "x">]><d/>'},
+        )
+        report = ingest([tmp_path])
+        assert report.read == ("notes.md",)
+        assert "DTD" in report.skipped[0].reason
+
+    def test_the_report_does_not_leak_the_path_the_os_put_in_its_message(self, tmp_path):
+        report = ingest([tmp_path / "missing.md"])
+        reason = report.skipped[0].reason
+        # Checked by name, not by the whole path: on Windows the message carries
+        # the path with its backslashes doubled, so the literal path never matches.
+        assert tmp_path.name not in reason
+        assert "missing.md" not in reason
+        assert "FileNotFoundError" in reason
+
+    def test_a_hidden_folder_is_not_walked(self, tmp_path):
+        text = "# Notes\n\nA note long enough to be worth indexing on its own."
+        (tmp_path / ".private").mkdir()
+        (tmp_path / ".private" / "secret.md").write_text(text, encoding="utf-8")
+        (tmp_path / "visible.md").write_text(text, encoding="utf-8")
+        assert ingest([tmp_path], root=tmp_path).read == ("visible.md",)
+
+    def test_a_link_out_of_the_folder_is_not_followed(self, tmp_path):
+        import os
+
+        outside = tmp_path / "outside" / "secret.md"
+        outside.parent.mkdir()
+        outside.write_text("# Secret\n\nSomething that is not part of the folder.", encoding="utf-8")
+        folder = tmp_path / "folder"
+        folder.mkdir()
+        (folder / "notes.md").write_text(
+            "# Notes\n\nA note long enough to be worth indexing on its own.",
+            encoding="utf-8",
+        )
+        try:
+            os.symlink(outside, folder / "link.md")
+        except (OSError, NotImplementedError):
+            pytest.skip("this system does not allow creating symbolic links")
+        assert ingest([folder], root=folder).read == ("notes.md",)

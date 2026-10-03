@@ -31,6 +31,20 @@ from .chunking import detect_heading
 _W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
 _HEADING_STYLE = re.compile(r"^heading\s+(\d)$")
 
+# Ceilings for untrusted input. A .docx is a zip, and a zip can be a few kilobytes
+# on disk and gigabytes once unpacked; a text file can simply be enormous. Both
+# are checked before anything is read, and both can be raised on purpose.
+DEFAULT_MAX_TEXT_BYTES = 64 * 1024 * 1024
+DEFAULT_MAX_DOCX_PART_BYTES = 32 * 1024 * 1024
+
+
+def _check_size(size: int, limit: int, what: str) -> None:
+    if size > limit:
+        raise ValueError(
+            f"{what} is {size:,} bytes and the limit is {limit:,}; "
+            f"raise the reader's limit if this is intended"
+        )
+
 
 class MissingDependency(ImportError):
     """A reader needs a library that is not installed.
@@ -58,7 +72,11 @@ class TextReader:
     are kept.
     """
 
+    def __init__(self, max_bytes: int = DEFAULT_MAX_TEXT_BYTES) -> None:
+        self.max_bytes = max_bytes
+
     def read(self, path: str | Path) -> list[tuple[int | None, str]]:
+        _check_size(Path(path).stat().st_size, self.max_bytes, "the text file")
         text = Path(path).read_text(encoding="utf-8-sig")
         if "\f" in text:
             return [(n, page) for n, page in enumerate(text.split("\f"), start=1)]
@@ -112,11 +130,18 @@ class DocxReader:
     in policies and price lists the tables are often where the answer lives.
     """
 
+    def __init__(self, max_part_bytes: int = DEFAULT_MAX_DOCX_PART_BYTES) -> None:
+        self.max_part_bytes = max_part_bytes
+
     def read(self, path: str | Path) -> list[tuple[int | None, str]]:
         with zipfile.ZipFile(path) as package:
-            document = ElementTree.fromstring(package.read("word/document.xml"))
+            document = ElementTree.fromstring(
+                _part_bytes(package, "word/document.xml", self.max_part_bytes)
+            )
             try:
-                styles = _read_styles(package.read("word/styles.xml"))
+                styles = _read_styles(
+                    _part_bytes(package, "word/styles.xml", self.max_part_bytes)
+                )
             except KeyError:
                 styles = {}
 
@@ -151,6 +176,24 @@ class DocxReader:
         flush()
 
         return [(None, "\n\n".join(blocks))]
+
+
+def _part_bytes(package: zipfile.ZipFile, name: str, limit: int) -> bytes:
+    """Read one part of a .docx, refusing what would unpack too large.
+
+    The size a zip declares is checked before anything is read, and zipfile
+    never returns more than it declared. A Word document also never needs a
+    DTD, which is where entity-expansion attacks live, so a part that declares
+    one is refused rather than handed to the parser.
+    """
+    info = package.getinfo(name)  # KeyError when the part is absent, as before
+    _check_size(info.file_size, limit, f"the {name} part")
+    data = package.read(name)
+    if b"<!DOCTYPE" in data or b"<!ENTITY" in data:
+        raise ValueError(
+            f"the {name} part declares a DTD, which a Word document does not need"
+        )
+    return data
 
 
 def _body_elements(body: ElementTree.Element):
