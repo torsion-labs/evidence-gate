@@ -19,8 +19,8 @@ keywords = ["rag", "retrieval", "citations", "evaluation", "provenance"]
 dependencies = []
 
 [project.optional-dependencies]
-pdf = ["pypdf>=4.0"]
-dev = ["pytest>=7.0", "pypdf>=4.0"]
+pdf = ["pypdf>=6.19.0"]
+dev = ["pytest>=9.0.3", "pypdf>=6.19.0"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/evidence_gate"]
