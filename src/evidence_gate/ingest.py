@@ -101,8 +101,8 @@ def ingest(
     """Read files and folders into chunks, reporting everything left out.
 
     Folders are walked recursively in a fixed order, skipping hidden files and
-    the `~$` lock files Word leaves behind; a file named explicitly is always
-    attempted. Each chunk is cited by its path relative to `root` when one is
+    folders, links that lead out of the folder, and the `~$` lock files Word
+    leaves behind; a file named explicitly is always attempted. Each chunk is cited by its path relative to `root` when one is
     given, and by its file name otherwise. Two files that would be cited by
     the same name are an error rather than a warning: a citation that could
     mean either of two documents is not a citation.
@@ -140,7 +140,7 @@ def ingest(
             skipped.append(Skipped(name, str(exc)))
             continue
         except Exception as exc:  # a broken file must not stop the others
-            detail = f"{type(exc).__name__}: {exc}"
+            detail = _describe(exc)
             skipped.append(Skipped(name, f"could not be read ({detail})"))
             continue
 
@@ -177,11 +177,24 @@ def _expand(paths: Iterable[str | Path]) -> Iterable[Path]:
     for raw in paths:
         path = Path(raw)
         if path.is_dir():
+            top = path.resolve()
             for found in sorted(path.rglob("*")):
-                if found.is_file() and not _ignored(found.name):
-                    yield found
+                if any(_ignored(part) for part in found.relative_to(path).parts):
+                    continue  # hidden files, and anything inside a hidden folder
+                if not found.is_file():
+                    continue
+                if found.is_symlink() and not found.resolve().is_relative_to(top):
+                    continue  # a link out of the folder is not part of the folder
+                yield found
         else:
             yield path
+
+
+def _describe(exc: Exception) -> str:
+    """An exception for a report, without the paths the OS puts in its messages."""
+    if isinstance(exc, OSError) and exc.strerror:
+        return f"{type(exc).__name__}: {exc.strerror}"
+    return f"{type(exc).__name__}: {exc}"
 
 
 def _ignored(name: str) -> bool:

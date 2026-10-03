@@ -69,8 +69,18 @@ def extract_anchors(question: str) -> tuple[str, ...]:
     return tuple(seen)
 
 
+_NUMBER = re.compile(r"^\d+(?:[.,]\d+)?$")
+
+
 def _contains(haystack: str, needle: str) -> bool:
-    return normalise(needle) in normalise(haystack)
+    haystack, needle = normalise(haystack), normalise(needle)
+    if _NUMBER.match(needle):
+        # A number is not found inside a longer one: 48 is not in 148, 480 or
+        # 48.5. Plain substring matching accepted exactly the near-miss that
+        # the anchors exist to catch.
+        pattern = rf"(?<!\d)(?<!\d[.,]){re.escape(needle)}(?!\d)(?![.,]\d)"
+        return re.search(pattern, haystack) is not None
+    return needle in haystack
 
 
 @dataclass(frozen=True)

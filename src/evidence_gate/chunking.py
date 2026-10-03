@@ -22,7 +22,11 @@ from dataclasses import dataclass
 
 from .types import Chunk, Source
 
-_HEADING = re.compile(r"^\s{0,3}(?:#{1,6}\s+(?P<hash>.+)|(?P<upper>[A-Z][A-Z0-9 ,.'/&()-]{6,})\s*)$")
+# No trailing `\s*` after the capitals alternative. detect_heading strips the
+# line first, and a `\s*` next to a character class that also contains the
+# space made a line such as "A" + 60,000 spaces + "!" take quadratic time to
+# reject: the same run of spaces could be split between the two in every way.
+_HEADING = re.compile(r"^\s{0,3}(?:#{1,6}\s+(?P<hash>.+)|(?P<upper>[A-Z][A-Z0-9 ,.'/&()-]{6,}))$")
 _PARAGRAPH = re.compile(r"\n\s*\n")
 
 
